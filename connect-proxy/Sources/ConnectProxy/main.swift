@@ -18,38 +18,37 @@ import NIOHTTP1
 import Logging
 import Dispatch
 
+let logger = Logger(label: "com.nio.main")
 let group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 let bootstrap = ServerBootstrap(group: group)
-    .serverChannelOption(ChannelOptions.socket(SOL_SOCKET, SO_REUSEADDR), value: 1)
-    .childChannelOption(ChannelOptions.socket(SOL_SOCKET, SO_REUSEADDR), value: 1)
+    .serverChannelOption(ChannelOptions.socket(.init(SOL_SOCKET), SO_REUSEADDR), value: 1)
+    .childChannelOption(ChannelOptions.socket(.init(SOL_SOCKET), SO_REUSEADDR), value: 1)
     .childChannelInitializer { channel in
         channel.pipeline.addHandler(ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)))
             .flatMap { channel.pipeline.addHandler(HTTPResponseEncoder()) }
-            .flatMap { channel.pipeline.addHandler(ConnectHandler(logger: Logger(label: "com.apple.nio-connect-proxy.ConnectHandler"))) }
+            .flatMap { channel.pipeline.addHandler(ConnectHandler(logger: Logger(label: "com.nio.ConnectHandler"))) }
     }
 
-bootstrap.bind(to: try! SocketAddress(ipAddress: "127.0.0.1", port: 8080)).whenComplete { result in
-    // Need to create this here for thread-safety purposes
-    let logger = Logger(label: "com.apple.nio-connect-proxy.main")
-
-    switch result {
-    case .success(let channel):
-        logger.info("Listening on \(String(describing: channel.localAddress))")
-    case .failure(let error):
-        logger.error("Failed to bind 127.0.0.1:8080, \(error)")
+let port = 3128
+private extension ServerBootstrap {
+    func bindTo(socket: SocketAddress) {
+        bind(to: socket).whenComplete { result in
+            switch result {
+            case .success(let channel):
+                logger.info("Listening on \(String(describing: channel.localAddress))")
+            case .failure(let error):
+                logger.error("Failed to bind \(socket.ipAddress ?? ""):\(port), \(error)")
+            }
+        }
     }
 }
 
-bootstrap.bind(to: try! SocketAddress(ipAddress: "::1", port: 8080)).whenComplete { result in
-    // Need to create this here for thread-safety purposes
-    let logger = Logger(label: "com.apple.nio-connect-proxy.main")
+if let socket = try? SocketAddress(ipAddress: "127.0.0.1", port: port) {
+    bootstrap.bindTo(socket: socket)
+}
 
-    switch result {
-    case .success(let channel):
-        logger.info("Listening on \(String(describing: channel.localAddress))")
-    case .failure(let error):
-        logger.error("Failed to bind [::1]:8080, \(error)")
-    }
+if let socket = try? SocketAddress(ipAddress: "::1", port: port) {
+    bootstrap.bindTo(socket: socket)
 }
 
 // Run forever
