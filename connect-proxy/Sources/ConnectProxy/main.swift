@@ -43,7 +43,7 @@ private extension ServerBootstrap {
     }
 }
 
-if let socket = try? SocketAddress(ipAddress: "127.0.0.1", port: port) {
+if let socket = try? SocketAddress(ipAddress: "0.0.0.0", port: port) {
     bootstrap.bindTo(socket: socket)
 }
 
